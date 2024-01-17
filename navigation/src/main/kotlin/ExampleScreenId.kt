@@ -30,6 +30,7 @@ enum class ExampleScreenId {
         "/blog/{blogId}",
         stringArguments = [StringArgument("blogId")],
         deepLinks = ["/blog/{blogId}"],
+        constructorAsInternal = true
     )
     Blog,
 

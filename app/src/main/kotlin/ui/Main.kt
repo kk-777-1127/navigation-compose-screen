@@ -29,7 +29,6 @@ fun Main(navController: ScreenNavController) {
             home { screen ->
                 val viewModel = hiltViewModel<HomeViewModel>()
                 val state by viewModel.state.collectAsState()
-
                 Home(
                     state = state,
                     snackbarHostState = viewModel.snackbarHostState,
@@ -38,7 +37,7 @@ fun Main(navController: ScreenNavController) {
                     onReloadButtonClick = { viewModel.reload() },
                     onSettingsButtonClick = { navController.navigate(ExampleScreen.Settings) },
                     onAboutClick = { navController.navigate(ExampleScreen.About) },
-                    onItemClick = { navController.navigate(ExampleScreen.Blog(it.id)) },
+                    onItemClick = { navController.navigate(ExampleScreen.Blog(ExampleScreen.Blog.Blogid(id = it.id))) },
                 )
             }
             blog { screen ->

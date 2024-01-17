@@ -36,6 +36,7 @@ sealed class ScreenRouteClass {
     abstract val name: String
     abstract val routeType: RouteType
     abstract val route: String
+    abstract val constructorAsInternal: Boolean
     abstract val deepLinks: List<String>
     abstract val typeSpec: TypeSpec
 
@@ -63,6 +64,7 @@ sealed class ScreenRouteClass {
         override val name: String,
         override val routeType: RouteType,
         override val route: String,
+        override val constructorAsInternal: Boolean,
         override val deepLinks: List<String>,
         private val enumClassName: ClassName,
     ) : ScreenRouteClass() {
@@ -98,6 +100,7 @@ sealed class ScreenRouteClass {
         override val name: String,
         override val routeType: RouteType,
         override val route: String,
+        override val constructorAsInternal: Boolean,
         override val deepLinks: List<String>,
         private val enumClassName: ClassName,
         private val argumentArgs: Set<Arg>,
@@ -156,6 +159,44 @@ sealed class ScreenRouteClass {
             val companionObjectBuilder = TypeSpec.companionObjectBuilder()
                 .addSuperinterface(ScreenFactory.parameterizedBy(className))
                 .addFunctions(listOf(fromBundleFunSpec, fromSavedStateHandleFunSpec))
+            if (constructorAsInternal) {
+                // TODO Consider types other than String
+                compiledArgs.filter { it.type == Arg.Type.String }.map { arg ->
+                    val stringArgClassName = ClassName(className.packageName, arg.name.toCamelCase())
+                    val type = TypeSpec.classBuilder(stringArgClassName)
+                        .addModifiers(KModifier.DATA)
+                        .primaryConstructor(
+                            FunSpec.constructorBuilder()
+                                .addParameter("id", String::class)
+                                .build()
+                        )
+                        .addProperty(
+                            PropertySpec.builder("id", String::class)
+                                .initializer("id")
+                                .build()
+                        ).build()
+                    spec.addType(type)
+                    ParameterSpec.builder(arg.name, className.nestedClass(arg.name.toCamelCase())).build()
+            }.let {
+                    val returnCodeblock = CodeBlock
+                        .builder()
+                        .add("return %T(\n", className)
+                        .indent()
+                    compiledArgs.forEach { arg ->
+                        returnCodeblock.add("%N = %N.id,\n", arg.name, arg.name)
+                    }
+                    companionObjectBuilder.addFunction(
+                        FunSpec.builder("invoke")
+                            .addModifiers(KModifier.OPERATOR)
+                            .returns(className)
+                            .addParameters(it)
+                            .addCode(
+                                returnCodeblock.unindent().add(")").build()
+                            )
+                            .build()
+                    ).build()
+                }
+            }
 
             spec.addType(companionObjectBuilder.build())
             spec.build()
@@ -343,7 +384,6 @@ sealed class ScreenRouteClass {
             require(classDeclaration.classKind == ClassKind.ENUM_ENTRY)
             val name = classDeclaration.simpleName.asString()
 
-
             val routeAnnotation =
                 classDeclaration.getAnnotationsByType(Route::class).firstOrNull() ?: return null
 
@@ -374,6 +414,7 @@ sealed class ScreenRouteClass {
                     name,
                     routeAnnotation.type,
                     routeAnnotation.route,
+                    routeAnnotation.constructorAsInternal,
                     routeAnnotation.deepLinks.toList(),
                     enumClassName,
                     args.toSet(),
@@ -384,6 +425,7 @@ sealed class ScreenRouteClass {
                     name,
                     routeAnnotation.type,
                     routeAnnotation.route,
+                    routeAnnotation.constructorAsInternal,
                     routeAnnotation.deepLinks.toList(),
                     enumClassName,
                 )
